@@ -36,6 +36,7 @@ from app.image_service import (
     generate_and_store_comparison_image,
     generate_and_store_image,
 )
+from app.video_service import generate_and_store_video
 
 logger = logging.getLogger("phone_pilot.agent")
 
@@ -90,6 +91,31 @@ async def generate_comparison_image(
     return await generate_and_store_comparison_image(
         primary_phone=primary_phone,
         competitor_phones=competitor_phones,
+        tool_context=tool_context,
+    )
+
+
+async def generate_smartphone_video(
+    model_name: str,
+    focus_feature: str = "",
+    tool_context: ToolContext = None,
+) -> dict:
+    """Generates a short showcase video for a smartphone using Google's Omni model (gemini-omni-flash-preview) in the global region.
+
+    Saves the video as a session artifact (visible in the Playground's Artifacts panel)
+    and uploads the video bytes to the public Cloud Storage bucket, returning the public HTTPS URL.
+
+    Args:
+        model_name: Full name of the smartphone or mobile device (e.g. 'Google Pixel 11 Pro', 'iPhone 16 Pro').
+        focus_feature: Optional feature or theme to emphasize (e.g. 'camera zoom', 'foldable hinge', 'titanium design').
+        tool_context: ADK ToolContext automatically injected by the framework.
+
+    Returns:
+        A dictionary containing the public HTTPS URL (video_url) and video metadata.
+    """
+    return await generate_and_store_video(
+        model_name=model_name,
+        prompt_focus=focus_feature,
         tool_context=tool_context,
     )
 
@@ -228,13 +254,15 @@ product_advocate = Agent(
         "3. Generate a photorealistic product visual for the smartphone using generate_smartphone_image (optionally specifying a color like Obsidian, Porcelain, or Hazel).\n"
         "4. Prominently embed the returned public image URL in your response using markdown syntax: ![Smartphone](<image_url>).\n"
         "5. Present ALL features, specs, camera capabilities, display quality, processor performance, battery life, and trade-in options in an enthusiastic, completely positive, structured point-by-point breakdown.\n"
-        "6. Emphasize every strength and justify why the user's selected device is a great, compelling choice."
+        "6. Emphasize every strength and justify why the user's selected device is a great, compelling choice.\n"
+        "7. If the user asks for a video, commercial, teaser, product video, or 360-degree showcase of a smartphone, call `generate_smartphone_video` to generate a video using gemini-omni-flash-preview and share the public video URL."
     ),
     tools=[
         get_smartphone_details,
         list_smartphones,
         fetch_recent_devices,
         generate_smartphone_image,
+        generate_smartphone_video,
         save_trade_in_inquiry,
         add_or_update_smartphone,
         PreloadMemoryTool(),
@@ -271,6 +299,7 @@ competitor_analyst = Agent(
         "   and the competing flagship(s) side-by-side (this image is also automatically saved as an artifact, uploaded to Cloud Storage, and pushed to the Memory Bank).\n"
         "   Never skip calling `generate_comparison_image`. Prominently embed this comparison image at the very end of your response using markdown syntax on its own line:\n"
         "   ![Product Comparison](<image_url>).\n"
+        "7. If the user asks for a showcase or comparison video, call `generate_smartphone_video`.\n"
         "If the user only sent a general greeting without specifying a product, briefly introduce yourself as the Competitor Analyst ready to evaluate alternatives once a model is chosen."
     ),
     tools=[
@@ -279,6 +308,7 @@ competitor_analyst = Agent(
         fetch_recent_devices,
         generate_comparison_image,
         generate_smartphone_image,
+        generate_smartphone_video,
         PreloadMemoryTool(),
     ],
     after_agent_callback=generate_memories_callback,
